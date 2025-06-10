@@ -186,10 +186,16 @@ class Detector:
         """
         ts = datetime.now()
         dq = self.subscribe_map[client_id]
-        dq.append(ts)
-        dq = self._is_within_window(dq, ts, window=1)
-        self.subscribe_map[client_id] = dq
-        if len(dq) >= self.subscribe_threshold:
+        for attempt in range(3):
+            try:
+                response = requests.post(DEFAULT_API_ENDPOINT, json=payload, timeout=5)
+                if 200 <= response.status_code < 300:
+                    return
+                logger.warning(f"[Alert Send Failed] status={response.status_code}")
+            except Exception as e:
+                logger.error(f"[Alert Send Error] {e}")
+            time.sleep(1)
+        logger.warning("[Alert Send Failed] retries exhausted")
             msg = f"[Subscribe Flood Detected] Client={client_id} Count={len(dq)}/sec"
             logger.warning(msg)
             self._send_alert('SubscribeFlood', {'client_id': client_id, 'count_per_sec': len(dq)})
